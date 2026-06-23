@@ -50,7 +50,7 @@ const APPLY_DOMAIN = 'https://iwfh.currentaffairsadda22.com';
 // ── ASSETS ────────────────────────────────────────────────
 const STYLES = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
 const FONTS  = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap';
-const FAVICON = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237C3AED'/><text x='50%25' y='54%25' font-size='14' text-anchor='middle' dominant-baseline='middle' font-family='sans-serif' font-weight='800' fill='%23fff'>${LOGO_LETTER}</text></svg>`;
+const FAVICON = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237C3AED'/><text x='50%25' y='55%25' font-size='13' text-anchor='middle' dominant-baseline='middle' font-family='system-ui,sans-serif' font-weight='900' fill='%23fff'>${LOGO_LETTER}</text></svg>`;
 
 // ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
 const TTL_LIST    =  5 * 60 * 1000;
@@ -148,21 +148,29 @@ function applyUrl(permalink) {
 
 function sanitize(raw) {
     if (!raw) return '';
-    let s = raw.replace(/<a\b[^>]*>\s*apply\s+(?:tot?\s+|for\s+)(?:this\s+|his\s+)?job\s*<\/a>/gi, (m, offset) => offset > raw.length * 0.75 ? '' : m);
+    let s = raw;
+    // Strip all anchor tags and their content entirely
+    s = s.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, '');
+    // Strip ChatGPT UI artifact divs + content — multiple passes for nesting
+    for (let i = 0; i < 6; i++) {
+        s = s.replace(/<div\b[^>]*class="[^"]*(?:code-block|text-token|dark:|flex|whitespace-pre|min-h-|overflow-x|gap-)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    }
     s = s.replace(/\r\n?/g, '\n');
     s = s.replace(/\[\s*\/?\s*(?:ad|ads|adsense|banner)[\w\s-]*\]/gi, '');
     s = s.replace(/<(script|style|iframe|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+    // Convert <p> to double newlines so formatContent handles spacing correctly
+    s = s.replace(/<\/p\s*>/gi, '\n\n');
+    s = s.replace(/<p\b[^>]*>/gi, '');
     s = s.replace(/<br\s*\/?>/gi, '\n');
     s = s.replace(/<\s*([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g, '<$1>');
     const unwrap = /^<\/?(span|div|font|center|section|article|header|footer|figure|table|thead|tbody|tr|td|th|svg|path|img|nav|main|aside)>$/i;
     s = s.replace(/<[^>]+>/g, m => unwrap.test(m) ? '' : m);
     const ent = { nbsp:' ',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",hellip:'…',mdash:'—',ndash:'–',bull:'•',rsquo:'’',lsquo:'‘',ldquo:'“',rdquo:'”' };
     s = s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, r) => { if (r[0]==='#') { const c=r[1]==='x'?parseInt(r.slice(2),16):parseInt(r.slice(1),10); return Number.isFinite(c)?String.fromCodePoint(c):''; } return ent[r.toLowerCase()]??''; });
-    const allowed = /^<\/?(p|ul|ol|li|h[1-6]|strong|b|em|i|blockquote|code|pre)>$/i;
+    const allowed = /^<\/?(ul|ol|li|h[1-6]|strong|b|em|i|blockquote|code|pre)>$/i;
     s = s.replace(/<[^>]+>/g, m => allowed.test(m) ? m : '');
     return s.replace(/[ \t]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
-
 function formatContent(raw) {
     let s = sanitize(raw);
     if (!s) return '';
@@ -543,10 +551,6 @@ ${nav()}
             <li>Posted: ${datePosted}</li>
             <li>Valid until: ${validThru}</li>
           </ul>
-        </div>
-        <div class="sidebar-card">
-          <span class="sidebar-card-label">About ${SITE_NAME}</span>
-          <p>Thousands of remote roles indexed daily — no account, no fees, just find your next position.</p>
         </div>
       </aside>
     </div>
