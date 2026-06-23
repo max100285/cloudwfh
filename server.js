@@ -149,26 +149,32 @@ function applyUrl(permalink) {
 function sanitize(raw) {
     if (!raw) return '';
     let s = raw;
-    // Strip all anchor tags and their content entirely
+    // Decode entities FIRST so &lt;div class="..."&gt; becomes a real tag before stripping
+    const ent = { nbsp:' ',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",hellip:'\u2026',mdash:'\u2014',ndash:'\u2013',bull:'\u2022',rsquo:'\u2019',lsquo:'\u2018',ldquo:'\u201C',rdquo:'\u201D' };
+    s = s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, r) => { if (r[0]==='#') { const c=r[1]==='x'?parseInt(r.slice(2),16):parseInt(r.slice(1),10); return Number.isFinite(c)?String.fromCodePoint(c):''; } return ent[r.toLowerCase()]??m; });
+    // Strip all anchor tags and their content
     s = s.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, '');
-    // Strip ChatGPT UI artifact divs + content — multiple passes for nesting
-    for (let i = 0; i < 6; i++) {
-        s = s.replace(/<div\b[^>]*class="[^"]*(?:code-block|text-token|dark:|flex|whitespace-pre|min-h-|overflow-x|gap-)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    // Remove classed divs inside-out so nested ChatGPT wrappers are peeled layer by layer
+    for (let i = 0; i < 15; i++) {
+        const prev = s;
+        s = s.replace(/<div\b[^>]*class="[^"]*"[^>]*>(?:(?!<div\b)[\s\S])*<\/div>/gi, '');
+        if (s === prev) break;
     }
+    // Remove any leftover orphan div tags
+    s = s.replace(/<\/?\s*div\b[^>]*>/gi, '');
     s = s.replace(/\r\n?/g, '\n');
     s = s.replace(/\[\s*\/?\s*(?:ad|ads|adsense|banner)[\w\s-]*\]/gi, '');
     s = s.replace(/<(script|style|iframe|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
-    // Convert <p> to double newlines so formatContent handles spacing correctly
     s = s.replace(/<\/p\s*>/gi, '\n\n');
     s = s.replace(/<p\b[^>]*>/gi, '');
     s = s.replace(/<br\s*\/?>/gi, '\n');
     s = s.replace(/<\s*([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g, '<$1>');
-    const unwrap = /^<\/?(span|div|font|center|section|article|header|footer|figure|table|thead|tbody|tr|td|th|svg|path|img|nav|main|aside)>$/i;
+    const unwrap = /^<\/?(span|font|center|section|article|header|footer|figure|table|thead|tbody|tr|td|th|svg|path|img|nav|main|aside)>$/i;
     s = s.replace(/<[^>]+>/g, m => unwrap.test(m) ? '' : m);
-    const ent = { nbsp:' ',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",hellip:'…',mdash:'—',ndash:'–',bull:'•',rsquo:'’',lsquo:'‘',ldquo:'“',rdquo:'”' };
-    s = s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, r) => { if (r[0]==='#') { const c=r[1]==='x'?parseInt(r.slice(2),16):parseInt(r.slice(1),10); return Number.isFinite(c)?String.fromCodePoint(c):''; } return ent[r.toLowerCase()]??''; });
     const allowed = /^<\/?(ul|ol|li|h[1-6]|strong|b|em|i|blockquote|code|pre)>$/i;
     s = s.replace(/<[^>]+>/g, m => allowed.test(m) ? m : '');
+    // Re-encode bare & left over from entity decoding so HTML stays valid
+    s = s.replace(/&(?![a-zA-Z#][a-zA-Z0-9#]*;)/g, '&amp;');
     return s.replace(/[ \t]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function formatContent(raw) {
