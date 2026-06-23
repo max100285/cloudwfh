@@ -156,7 +156,7 @@ function sanitize(raw) {
     s = s.replace(/<\s*([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g, '<$1>');
     const unwrap = /^<\/?(span|div|font|center|section|article|header|footer|figure|table|thead|tbody|tr|td|th|svg|path|img|nav|main|aside)>$/i;
     s = s.replace(/<[^>]+>/g, m => unwrap.test(m) ? '' : m);
-    const ent = { nbsp:' ',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",hellip:'…',mdash:'—',ndash:'–',bull:'•',rsquo:''',lsquo:''',ldquo:'"',rdquo:'"' };
+    const ent = { nbsp:' ',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",hellip:'…',mdash:'—',ndash:'–',bull:'•',rsquo:'’',lsquo:'‘',ldquo:'“',rdquo:'”' };
     s = s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, r) => { if (r[0]==='#') { const c=r[1]==='x'?parseInt(r.slice(2),16):parseInt(r.slice(1),10); return Number.isFinite(c)?String.fromCodePoint(c):''; } return ent[r.toLowerCase()]??''; });
     const allowed = /^<\/?(p|ul|ol|li|h[1-6]|strong|b|em|i|blockquote|code|pre)>$/i;
     s = s.replace(/<[^>]+>/g, m => allowed.test(m) ? m : '');
