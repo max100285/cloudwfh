@@ -192,6 +192,12 @@ function formatContent(raw) {
     return html;
 }
 
+function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+}
+
 // ── SITEMAP CACHE ─────────────────────────────────────────
 let _sitemapJobs = [];
 
@@ -358,6 +364,10 @@ app.get(['/', '/page/:page'], async (req, res) => {
             apiGetJobs({ page, search }),
             isHome ? apiGetJobs({ page: 1 }) : Promise.resolve(null),
         ]);
+        if (isHome) {
+            data.jobs = shuffle(data.jobs);
+            if (recent) recent.jobs = shuffle(recent.jobs);
+        }
 
         const canonical  = `${SITE_URL}${page > 1 ? `/page/${page}/` : '/'}`;
         const noindexTag = search ? '<meta name="robots" content="noindex,follow">' : '';
@@ -371,7 +381,6 @@ ${headTag(`${SITE_NAME} — ${TAGLINE}`, META_DESC, canonical, noindexTag)}
 ${nav()}
 <header class="hero-section">
   <div class="container">
-    <span class="hero-eyebrow">New listings every day</span>
     <h1 class="hero-title">The Universe of<br><em>Remote Work</em></h1>
     <p class="hero-desc">Thousands of remote roles across every field — explore freely, apply with one click.</p>
     <form action="/" method="GET" class="search-wrap">
@@ -557,7 +566,6 @@ ${nav()}
             <li>Location: Fully Remote</li>
             <li>Country: ${country}</li>
             <li>Posted: ${datePosted}</li>
-            <li>Valid until: ${validThru}</li>
           </ul>
         </div>
       </aside>
