@@ -311,6 +311,10 @@ const headTag = (title, desc, canonical, extra = '') => `
 // ── INFRA ROUTES ──────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+app.get('/googlea5509f9e642a23a1.html', (_req, res) => {
+    res.type('text/html').send('google-site-verification: googlea5509f9e642a23a1.html');
+});
+
 app.get('/robots.txt', (_req, res) => {
     res.set('Cache-Control', 'public, max-age=86400');
     res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml`);
