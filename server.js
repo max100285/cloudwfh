@@ -45,7 +45,7 @@ const CATEGORIES = {
 };
 
 const SITEMAP_SIZE = 12500;
-const APPLY_DOMAIN = 'https://iwfh.currentaffairsadda22.com';
+const APPLY_DOMAIN = 'https://ihire.allboardsolutions.in';
 
 // ── ASSETS ────────────────────────────────────────────────
 const STYLES = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
@@ -608,3 +608,4 @@ async function start() {
 }
 
 start().catch(err => { console.error(err); process.exit(1); });
+
