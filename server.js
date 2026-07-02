@@ -52,11 +52,9 @@ const STYLES = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
 const FONTS  = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap';
 const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'><rect width=\'32\' height=\'32\' rx=\'8\' fill=\'%237C3AED\'/><path d=\'M16 5C11.6 5 8 8.7 8 13.2C8 19.6 16 27 16 27C16 27 24 19.6 24 13.2C24 8.7 20.4 5 16 5Z\' fill=\'white\'/><circle cx=\'16\' cy=\'13\' r=\'3.8\' fill=\'%237C3AED\'/></svg>';
 
-// ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
-const TTL_LIST    =  3 * 60 * 1000;
-const TTL_JOB     =  3 * 60 * 1000;
-const TTL_SITEMAP =  6 * 60 * 60 * 1000;
-const MAX_CACHE   = 150;
+// ── IN-PROCESS RESPONSE CACHE (list pages only) ───────────
+const TTL_LIST  = 3 * 60 * 1000;
+const MAX_CACHE = 30;
 
 const _apiCache = new Map();
 
@@ -106,14 +104,18 @@ async function apiGetJobs({ page = 1, search = '' } = {}) {
 
 async function apiGetJob(slug) {
     try {
-        const data = await apiFetch(`/api/jobs/${encodeURIComponent(slug)}`, TTL_JOB);
+        const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(slug)}`, { headers: API_HDR });
+        if (!res.ok) return null;
+        const data = await res.json();
         return data.job ? normaliseJob(data.job) : null;
     } catch { return null; }
 }
 
 async function apiGetRelated(id) {
     try {
-        const data = await apiFetch(`/api/jobs/${encodeURIComponent(id)}`, TTL_JOB);
+        const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(id)}`, { headers: API_HDR });
+        if (!res.ok) return { recentJobs: [], randomJobs: [] };
+        const data = await res.json();
         return {
             recentJobs: (data.recentJobs || []).map(normaliseJob),
             randomJobs: (data.randomJobs || []).map(normaliseJob),
