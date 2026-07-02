@@ -198,12 +198,37 @@ async function buildSitemapCache() {
     try {
         const res = await fetch(`${API_URL}/api/sitemap-jobs`, { headers: API_HDR });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw = await res.json();
-        const jobs = raw.jobs || [];
-        const trimmed = new Array(jobs.length);
-        for (let i = 0; i < jobs.length; i++) {
-            trimmed[i] = { slug: jobs[i].slug || '', post_date: jobs[i].post_date || '' };
+
+        _sitemapJobs = []; // release old data so GC can reclaim before we allocate new
+
+        const trimmed = [];
+        const decoder = new TextDecoder();
+        const TAIL = 512; // overlap window to catch fields split across chunk boundaries
+        let buf = '';
+        let pSlug = null, pDate = null;
+
+        const extract = (text) => {
+            const re = /"slug":"([^"\\]*)"|"post_date":"([^"\\]*)"/g;
+            let m;
+            while ((m = re.exec(text)) !== null) {
+                if (m[1] !== undefined) {
+                    if (pDate !== null) { trimmed.push({ slug: m[1], post_date: pDate }); pDate = null; }
+                    else pSlug = m[1];
+                } else {
+                    if (pSlug !== null) { trimmed.push({ slug: pSlug, post_date: m[2] }); pSlug = null; }
+                    else pDate = m[2];
+                }
+            }
+        };
+
+        for await (const rawChunk of res.body) {
+            buf += decoder.decode(rawChunk, { stream: true });
+            if (buf.length <= TAIL) continue;
+            extract(buf.slice(0, buf.length - TAIL));
+            buf = buf.slice(buf.length - TAIL);
         }
+        extract(buf);
+
         _sitemapJobs = trimmed;
         console.log(`[sitemap] ${_sitemapJobs.length} jobs cached`);
     } catch (e) {
