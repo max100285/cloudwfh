@@ -192,18 +192,19 @@ function shuffle(arr) {
 }
 
 // ── SITEMAP CACHE ─────────────────────────────────────────
-let _sitemapJobs = [];
+// Flat "slug\tdate" strings use ~140MB vs ~280MB for {slug,post_date} objects
+let _sitemapLines = [];
 
 async function buildSitemapCache() {
     try {
         const res = await fetch(`${API_URL}/api/sitemap-jobs`, { headers: API_HDR });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        _sitemapJobs = []; // release old data so GC can reclaim before we allocate new
+        _sitemapLines = []; // release old data so GC can reclaim before we allocate new
 
-        const trimmed = [];
+        const newLines = [];
         const decoder = new TextDecoder();
-        const TAIL = 512; // overlap window to catch fields split across chunk boundaries
+        const TAIL = 512;
         let buf = '';
         let pSlug = null, pDate = null;
 
@@ -212,10 +213,10 @@ async function buildSitemapCache() {
             let m;
             while ((m = re.exec(text)) !== null) {
                 if (m[1] !== undefined) {
-                    if (pDate !== null) { trimmed.push({ slug: m[1], post_date: pDate }); pDate = null; }
+                    if (pDate !== null) { newLines.push(m[1] + '\t' + pDate); pDate = null; }
                     else pSlug = m[1];
                 } else {
-                    if (pSlug !== null) { trimmed.push({ slug: pSlug, post_date: m[2] }); pSlug = null; }
+                    if (pSlug !== null) { newLines.push(pSlug + '\t' + m[2]); pSlug = null; }
                     else pDate = m[2];
                 }
             }
@@ -229,8 +230,8 @@ async function buildSitemapCache() {
         }
         extract(buf);
 
-        _sitemapJobs = trimmed;
-        console.log(`[sitemap] ${_sitemapJobs.length} jobs cached`);
+        _sitemapLines = newLines;
+        console.log(`[sitemap] ${_sitemapLines.length} jobs cached`);
     } catch (e) {
         console.warn('[WARN] Sitemap cache failed:', e.message);
     }
@@ -392,7 +393,7 @@ app.get('/robots.txt', (_req, res) => {
 });
 
 app.get('/sitemap.xml', (_req, res) => {
-    const total = Math.ceil(_sitemapJobs.length / SITEMAP_SIZE);
+    const total = Math.ceil(_sitemapLines.length / SITEMAP_SIZE);
     const today = new Date().toISOString().split('T')[0];
     res.set('Cache-Control', 'public, max-age=3600');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -406,14 +407,17 @@ ${Array.from({ length: total }, (_, i) =>
 app.get('/sitemap-jobs:num.xml', (req, res) => {
     const n     = parseInt(req.params.num);
     const today = new Date().toISOString().split('T')[0];
-    const chunk = _sitemapJobs.slice((n-1)*SITEMAP_SIZE, n*SITEMAP_SIZE);
+    const chunk = _sitemapLines.slice((n-1)*SITEMAP_SIZE, n*SITEMAP_SIZE);
     if (!chunk.length) return res.status(404).send('Not found');
     res.set('Cache-Control', 'public, max-age=3600');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${chunk.map(j => {
-    const d = j.post_date ? new Date(j.post_date).toISOString().split('T')[0] : today;
-    return `  <url><loc>${SITE_URL}/remote-jobs/${j.slug}</loc><lastmod>${d}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`;
+${chunk.map(line => {
+    const tab = line.indexOf('\t');
+    const slug = tab >= 0 ? line.slice(0, tab) : line;
+    const raw  = tab >= 0 ? line.slice(tab + 1) : '';
+    const d    = raw ? new Date(raw).toISOString().split('T')[0] : today;
+    return `  <url><loc>${SITE_URL}/remote-jobs/${slug}</loc><lastmod>${d}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`;
 }).join('\n')}
 </urlset>`);
 });
