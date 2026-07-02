@@ -53,9 +53,10 @@ const FONTS  = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@
 const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'><rect width=\'32\' height=\'32\' rx=\'8\' fill=\'%237C3AED\'/><path d=\'M16 5C11.6 5 8 8.7 8 13.2C8 19.6 16 27 16 27C16 27 24 19.6 24 13.2C24 8.7 20.4 5 16 5Z\' fill=\'white\'/><circle cx=\'16\' cy=\'13\' r=\'3.8\' fill=\'%237C3AED\'/></svg>';
 
 // ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
-const TTL_LIST    =  5 * 60 * 1000;
-const TTL_JOB     = 10 * 60 * 1000;
+const TTL_LIST    =  3 * 60 * 1000;
+const TTL_JOB     =  3 * 60 * 1000;
 const TTL_SITEMAP =  6 * 60 * 60 * 1000;
+const MAX_CACHE   = 150;
 
 const _apiCache = new Map();
 
@@ -66,9 +67,10 @@ function _cacheGet(key) {
     return e.data;
 }
 function _cacheSet(key, data, ttl) {
+    if (_apiCache.size >= MAX_CACHE) { _apiCache.delete(_apiCache.keys().next().value); }
     _apiCache.set(key, { data, expires: Date.now() + ttl });
 }
-setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n > v.expires) _apiCache.delete(k); }, 15 * 60 * 1000);
+setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n > v.expires) _apiCache.delete(k); }, 5 * 60 * 1000);
 
 // ── VPS API HELPERS ───────────────────────────────────────
 async function apiFetch(apiPath, ttl = TTL_LIST) {
