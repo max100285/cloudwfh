@@ -119,13 +119,6 @@ async function apiGetRelated(id) {
     } catch { return { recentJobs: [], randomJobs: [] }; }
 }
 
-async function apiGetSitemapJobs() {
-    try {
-        const data = await apiFetch('/api/sitemap-jobs', TTL_SITEMAP);
-        return data.jobs || [];
-    } catch { return []; }
-}
-
 // ── CRC32 (deterministic dates per slug) ─────────────────
 const _t = new Uint32Array(256);
 for (let i = 0; i < 256; i++) { let c = i; for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); _t[i] = c; }
@@ -202,8 +195,20 @@ function shuffle(arr) {
 let _sitemapJobs = [];
 
 async function buildSitemapCache() {
-    _sitemapJobs = await apiGetSitemapJobs();
-    console.log(`[sitemap] ${_sitemapJobs.length} jobs cached`);
+    try {
+        const res = await fetch(`${API_URL}/api/sitemap-jobs`, { headers: API_HDR });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const raw = await res.json();
+        const jobs = raw.jobs || [];
+        const trimmed = new Array(jobs.length);
+        for (let i = 0; i < jobs.length; i++) {
+            trimmed[i] = { slug: jobs[i].slug || '', post_date: jobs[i].post_date || '' };
+        }
+        _sitemapJobs = trimmed;
+        console.log(`[sitemap] ${_sitemapJobs.length} jobs cached`);
+    } catch (e) {
+        console.warn('[WARN] Sitemap cache failed:', e.message);
+    }
 }
 
 // ── MIDDLEWARE ────────────────────────────────────────────
@@ -211,7 +216,42 @@ app.use(compression());
 app.disable('x-powered-by');
 
 // ── AI BOT BLOCKING ───────────────────────────────────────
-const AI_BOTS = /AddSearchBot|AgentTimes|AI2Bot|Ai2Bot-Dolma|aiHitBot|amazon-kendra|Amazonbot|AmazonBuyForMe|Amzn-SearchBot|Amzn-User|Andibot|Anomura|anthropic-ai|ApifyBot|ApifyWebsiteContentCrawler|Applebot-Extended|Aranet-SearchBot|atlassian-bot|Awario|AzureAI-SearchBot|bedrockbot|bigsur\.ai|Bravebot|Brightbot|BuddyBot|Bytespider|CCBot|Channel3Bot|ChatGLM-Spider|ChatGPT-User|Claude-Code|Claude-SearchBot|Claude-User|Claude-Web|ClaudeBot|Cloudflare-AutoRAG|CloudVertexBot|cohere-ai|cohere-training-data-crawler|Cotoyogi|CragCrawler|Crawl4AI|Crawlspace|DeepSeekBot|Devin|Diffbot|DuckAssistBot|ExaBot|FacebookBot|facebookexternalhit|FirecrawlAgent|FriendlyCrawler|Gemini-Deep-Research|Google-Extended|Google-NotebookLM|GoogleAgent-Mariner|GoogleAgent-URLContext|GoogleOther|GPTBot|iAskBot|iaskspider|ImagesiftBot|img2dataset|KlaviyoAIBot|KunatoCrawler|LAIONDownloader|LinerBot|LinkupBot|Manus-User|meta-externalagent|meta-externalfetcher|MistralAI-User|OAI-SearchBot|omgili|omgilibot|PanguBot|Perplexity-User|PerplexityBot|PetalBot|PhindBot|QualifiedBot|QuillBot|Scrapy|SemrushBot-OCOB|SemrushBot-SWA|TavilyBot|TikTokSpider|Timpibot|TwinAgent|VelenPublicWebCrawler|WARDBot|webzio-extended|WRTNBot|YandexAdditionalBot|YouBot|ZanistaBot/i;
+const BLOCKED_BOTS = [
+    'AddSearchBot','AgentTimes','AI2Bot','AI2Bot-DeepResearchEval','Ai2Bot-Dolma',
+    'aiHitBot','amazon-kendra','Amazonbot','AmazonBuyForMe','Amzn-SearchBot',
+    'Amzn-User','Andibot','Anomura','anthropic-ai','ApifyBot',
+    'ApifyWebsiteContentCrawler','Applebot','Applebot-Extended','Aranet-SearchBot',
+    'atlassian-bot','Awario','AzureAI-SearchBot','bedrockbot','bigsur.ai',
+    'Bravebot','Brightbot','Brightbot 1.0','BuddyBot','Bytespider',
+    'CCBot','Channel3Bot','ChatGLM-Spider','ChatGPT Agent','ChatGPT-User',
+    'Claude-Code','Claude-SearchBot','Claude-User','Claude-Web','ClaudeBot',
+    'Cloudflare-AutoRAG','CloudVertexBot','Code','cohere-ai','cohere-training-data-crawler',
+    'Cotoyogi','CragCrawler','Crawl4AI','Crawlspace','Cursor',
+    'Datenbank Crawler','DeepSeekBot','Devin','Diffbot','DuckAssistBot',
+    'Echobot Bot','EchoboxBot','ExaBot','FacebookBot','facebookexternalhit',
+    'Factset_spyderbot','FirecrawlAgent','FriendlyCrawler','GeistHaus-PageFetcher',
+    'Gemini-Deep-Research','Google-Agent','Google-CloudVertexBot','Google-Extended',
+    'Google-Firebase','Google-Gemini-CLI','Google-NotebookLM','GoogleAgent-Mariner',
+    'GoogleAgent-URLContext','GoogleOther','GoogleOther-Image','GoogleOther-Video',
+    'GPTBot','HenkBot','iAskBot','iaskspider','IbouBot','ICC-Crawler',
+    'ImagesiftBot','imageSpider','img2dataset','ISSCyberRiskCrawler','kagi-fetcher',
+    'Kangaroo Bot','Kimi-User','KlaviyoAIBot','KunatoCrawler',
+    'laion-huggingface-processor','LAIONDownloader','LCC','LinerBot','Linguee Bot',
+    'LinkupBot','Manus-User','meta-externalagent','Meta-ExternalAgent',
+    'meta-externalfetcher','Meta-ExternalFetcher','meta-webindexer','MistralAI-User',
+    'MistralAI-User/1.0','MyCentralAIScraperBot','NagetBot','netEstate Imprint Crawler',
+    'newsai','NotebookLM','NovaAct','OAI-SearchBot','omgili','omgilibot',
+    'OpenAI','opencode','Operator','PanguBot','Panscient','panscient.com',
+    'Perplexity-User','PerplexityBot','PetalBot','PhindBot','Poggio-Citations',
+    'Poseidon Research Crawler','QualifiedBot','Querit-SearchBot','QueritBot',
+    'QuillBot','quillbot.com','SBIntuitionsBot','Scrapy','SemrushBot-OCOB',
+    'SemrushBot-SWA','Shap-User','ShapBot','Sidetrade indexer bot','Spider',
+    'TavilyBot','Terra Cotta','TerraCotta','Thinkbot','TikTokSpider','Timpibot',
+    'Trae','TwinAgent','UseAI','VelenPublicWebCrawler','WARDBot','Webzio-Extended',
+    'webzio-extended','wpbot','WRTNBot','YaK','YandexAdditional','YandexAdditionalBot',
+    'YouBot','ZanistaBot',
+];
+const AI_BOTS = new RegExp(BLOCKED_BOTS.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i');
 app.use((req, res, next) => {
     if (req.path.startsWith('/google') && req.path.endsWith('.html')) return next();
     const ua = req.headers['user-agent'] || '';
