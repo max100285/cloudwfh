@@ -8,11 +8,11 @@ const app  = express();
 const PORT = process.env.PORT || 8080;
 
 // ── SITE CONFIG ───────────────────────────────────────────
-const SITE_NAME   = process.env.SITE_NAME   || 'RemoteOnly';
+const SITE_NAME   = process.env.SITE_NAME   || 'CloudWFH';
 const SITE_DOMAIN = process.env.SITE_DOMAIN || 'localhost:8080';
 const SITE_URL    = `https://${SITE_DOMAIN}`;
-const TAGLINE     = 'Explore the universe of remote work — daily listings';
-const META_DESC   = 'Discover thousands of remote jobs on JobVerse. Every role, every industry, updated daily. No sign-up required.';
+const TAGLINE     = 'Your gateway to work-from-home careers — updated daily';
+const META_DESC   = 'Find thousands of work-from-home jobs on CloudWFH. Browse WFH roles across every industry — free to apply, no sign-up needed.';
 const LOGO_LETTER = SITE_NAME.slice(0, 2).toUpperCase();
 
 // ── VPS API CONFIG ────────────────────────────────────────
@@ -49,8 +49,8 @@ const APPLY_DOMAIN = 'https://ihire.allboardsolutions.in';
 
 // ── ASSETS ────────────────────────────────────────────────
 const STYLES = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
-const FONTS  = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap';
-const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'><rect width=\'32\' height=\'32\' rx=\'8\' fill=\'%237C3AED\'/><path d=\'M16 5C11.6 5 8 8.7 8 13.2C8 19.6 16 27 16 27C16 27 24 19.6 24 13.2C24 8.7 20.4 5 16 5Z\' fill=\'white\'/><circle cx=\'16\' cy=\'13\' r=\'3.8\' fill=\'%237C3AED\'/></svg>';
+const FONTS  = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
+const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'><rect width=\'32\' height=\'32\' rx=\'8\' fill=\'%230D9488\'/><path d=\'M25 21H9a5 5 0 010-10c.3 0 .6.03.88.08A7 7 0 0123 16.5 4.5 4.5 0 0125 21z\' fill=\'white\'/><path d=\'M8.5 21h16a3.5 3.5 0 000-7c-.26 0-.52.03-.76.08A6 6 0 005 16.5 3.5 3.5 0 008.5 21z\' fill=\'white\' opacity=\'.7\'/></svg>';
 
 // ── IN-PROCESS RESPONSE CACHE (list pages only) ───────────
 const TTL_LIST  = 3 * 60 * 1000;
@@ -294,7 +294,7 @@ const jobCard = j => `
 <a href="/remote-jobs/${j.slug}" class="job-card">
   <div class="job-card-body">
     <h2 class="job-title">${escHtml(cleanTitle(j.post_title))}</h2>
-    <div class="job-meta"><span>Remote</span><span>Full-time</span></div>
+    <div class="job-meta"><span>WFH</span><span>Full-time</span></div>
   </div>
   <span class="job-card-arrow">&#8594;</span>
 </a>`;
@@ -302,7 +302,7 @@ const jobCard = j => `
 const jobTile = j => `
 <a href="/remote-jobs/${j.slug}" class="job-tile">
   <h2 class="job-title">${escHtml(cleanTitle(j.post_title))}</h2>
-  <div class="job-meta"><span>Remote</span><span>Full-time</span></div>
+  <div class="job-meta"><span>WFH</span><span>Full-time</span></div>
 </a>`;
 
 const nav = () => `
@@ -312,11 +312,11 @@ const nav = () => `
     <span>${SITE_NAME}</span>
   </a>
   <div class="nav-links">
-    <a href="/" class="nav-link">All Jobs</a>
+    <a href="/" class="nav-link">All WFH Jobs</a>
     <a href="/remote-full-time-jobs" class="nav-link">Full-time</a>
     <a href="/remote-entry-level-jobs" class="nav-link">Entry Level</a>
-    <a href="/remote-freelance-jobs" class="nav-link">Freelance</a>
-    <span class="nav-badge">80K+ Jobs</span>
+    <a href="/remote-work-from-home-jobs" class="nav-link">WFH</a>
+    <span class="nav-badge">80K+ Roles</span>
   </div>
 </div></nav>`;
 
@@ -354,8 +354,8 @@ const footer = () => `
     </div>
   </div>
   <div class="footer-base">
-    <p>&copy; ${new Date().getFullYear()} ${SITE_NAME}. Remote jobs updated daily.</p>
-    <p>Work from anywhere &mdash; every industry, every level.</p>
+    <p>&copy; ${new Date().getFullYear()} ${SITE_NAME}. WFH jobs updated daily.</p>
+    <p>Work from home &mdash; every industry, every level.</p>
   </div>
 </div></footer>`;
 
@@ -380,6 +380,7 @@ const headTag = (title, desc, canonical, extra = '') => `
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="${FONTS}" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="${FONTS}"></noscript>
+  <meta name="theme-color" content="#0D9488">
   <style>${STYLES}</style>
   ${extra}
 </head>`;
@@ -454,16 +455,17 @@ ${headTag(`${SITE_NAME} — ${TAGLINE}`, META_DESC, canonical, noindexTag)}
 ${nav()}
 <header class="hero-section">
   <div class="container">
-    <h1 class="hero-title">The Universe of<br><em>Remote Work</em></h1>
-    <p class="hero-desc">Thousands of remote roles across every field — explore freely, apply with one click.</p>
+    <span class="hero-eyebrow">&#9729; Work From Home Jobs</span>
+    <h1 class="hero-title">Find Your Perfect<br><em>WFH Career</em></h1>
+    <p class="hero-desc">Thousands of work-from-home opportunities across every field — browse freely, apply in one click.</p>
     <form action="/" method="GET" class="search-wrap">
-      <input type="search" name="search" placeholder="Job title, skill or keyword…" value="${escHtml(search)}" autocomplete="off" aria-label="Search remote jobs">
+      <input type="search" name="search" placeholder="Job title, skill or keyword…" value="${escHtml(search)}" autocomplete="off" aria-label="Search work from home jobs">
       <button type="submit">Search</button>
     </form>
     <div class="hero-stats">
-      <div class="hero-stat"><span class="hero-stat-num">80K+</span><span class="hero-stat-lbl">Open Roles</span></div>
+      <div class="hero-stat"><span class="hero-stat-num">80K+</span><span class="hero-stat-lbl">WFH Roles</span></div>
       <div class="hero-stat"><span class="hero-stat-num">17+</span><span class="hero-stat-lbl">Industries</span></div>
-      <div class="hero-stat"><span class="hero-stat-num">Free</span><span class="hero-stat-lbl">No Cost</span></div>
+      <div class="hero-stat"><span class="hero-stat-num">$0</span><span class="hero-stat-lbl">Always Free</span></div>
     </div>
   </div>
 </header>
@@ -478,7 +480,7 @@ ${nav()}
 <main class="container">
 ${data.jobs.length ? `
   <div class="section-intro">
-    <h2>${search ? `Results for &ldquo;${escHtml(search)}&rdquo;` : 'All Listings'}</h2>
+    <h2>${search ? `Results for &ldquo;${escHtml(search)}&rdquo;` : 'Latest WFH Openings'}</h2>
     <span>Page ${page} of ${data.pagination.totalPages}</span>
   </div>
   <div class="jobs-grid-2col">
@@ -491,8 +493,8 @@ ${data.jobs.length ? `
   ${isHome?`
   <div class="explore-section">
     <div class="explore-header">
-      <h2>Explore by Field</h2>
-      <p>Find roles organised by industry — discover what fits your background</p>
+      <h2>Browse by Category</h2>
+      <p>Find WFH roles by industry — discover what matches your skills</p>
     </div>
     <div class="cat-links">
       <a href="/remote-customer-support-jobs"   class="cat-link">Customer Support</a>
@@ -508,15 +510,15 @@ ${data.jobs.length ? `
     </div>
   </div>
   <div class="stats-strip">
-    <div class="stat-item"><span class="stat-big">80K+</span><span class="stat-sub">Live Roles</span><span class="stat-desc">Across all fields and experience levels</span></div>
-    <div class="stat-item"><span class="stat-big">100%</span><span class="stat-sub">Fully Remote</span><span class="stat-desc">Work from any location, worldwide</span></div>
-    <div class="stat-item"><span class="stat-big">$0</span><span class="stat-sub">No Account Needed</span><span class="stat-desc">Browse and apply completely free</span></div>
+    <div class="stat-item"><span class="stat-big">80K+</span><span class="stat-sub">WFH Positions</span><span class="stat-desc">Across all fields and experience levels</span></div>
+    <div class="stat-item"><span class="stat-big">100%</span><span class="stat-sub">Work From Home</span><span class="stat-desc">No commute, work from any location</span></div>
+    <div class="stat-item"><span class="stat-big">$0</span><span class="stat-sub">Free to Use</span><span class="stat-desc">Browse and apply — no sign-up required</span></div>
   </div>
   <div class="popular-tags">
     <span class="popular-label">Popular:</span>
     ${[['remote-full-time-jobs','Full-time Remote'],['remote-entry-level-jobs','Entry Level'],['remote-part-time-jobs','Part-time'],['remote-no-experience-jobs','No Experience'],['remote-freelance-jobs','Freelance'],['remote-data-entry-jobs','Data Entry'],['remote-work-from-home-jobs','Work From Home']].map(([s,l])=>`<a href="/${s}" class="pop-tag">${l}</a>`).join('')}
   </div>
-  <div class="block-header"><h2>New Today</h2><p>Just added</p></div>
+  <div class="block-header"><h2>Freshly Added</h2><p>Just posted today</p></div>
   <div class="jobs-grid-2col">
     ${(recent?.jobs||[]).map(jobTile).join('')}
   </div>`:''}
@@ -541,15 +543,15 @@ app.get('/:category', async (req, res, next) => {
         res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
         res.send(`<!DOCTYPE html><html lang="en">
 ${headTag(
-    `Remote ${label} Jobs — ${data.pagination.totalJobs.toLocaleString()} Openings | ${SITE_NAME}`,
-    `Explore ${data.pagination.totalJobs.toLocaleString()} remote ${search} positions on ${SITE_NAME}. Browse and apply for free — no sign-up required.`,
+    `WFH ${label} Jobs — ${data.pagination.totalJobs.toLocaleString()} Openings | ${SITE_NAME}`,
+    `Browse ${data.pagination.totalJobs.toLocaleString()} work-from-home ${search} jobs on ${SITE_NAME}. Apply for free — no sign-up required.`,
     canonical
 )}
 <body>
 ${nav()}
 <header class="cat-hero"><div class="container">
-  <h1>Remote ${label} Jobs</h1>
-  <p>${data.pagination.totalJobs.toLocaleString()} remote ${search} positions — updated daily.</p>
+  <h1>Work From Home ${label} Jobs</h1>
+  <p>${data.pagination.totalJobs.toLocaleString()} WFH ${search} positions — updated daily.</p>
   <form action="/" method="GET" class="search-wrap" style="max-width:500px">
     <input type="search" name="search" placeholder="Refine by keyword…" autocomplete="off" aria-label="Search jobs">
     <button type="submit">Search</button>
@@ -558,7 +560,7 @@ ${nav()}
 <main class="container">
 ${data.jobs.length?`
   <div class="section-intro">
-    <h2>Remote ${label} Roles</h2>
+    <h2>WFH ${label} Roles</h2>
     <span>Page ${page} of ${data.pagination.totalPages}</span>
   </div>
   <div class="jobs-grid">
@@ -613,7 +615,7 @@ app.get('/remote-jobs/:slug', async (req, res) => {
         res.send(`<!DOCTYPE html><html lang="en">
 ${headTag(
     `${title} | ${SITE_NAME}`,
-    `Apply for ${title} — a remote full-time role on ${SITE_NAME}. Work from anywhere, no commute required.`,
+    `Apply for ${title} — a work-from-home role on ${SITE_NAME}. WFH position, zero commute required.`,
     canonical,
     `<script type="application/ld+json">${schema}</script><script type="application/ld+json">${breadcrumb}</script>`
 )}
@@ -621,22 +623,22 @@ ${headTag(
 ${nav()}
 <main class="container">
   <div class="job-detail-wrap">
-    <a href="/" class="back-link">&larr; Back to all listings</a>
+    <a href="/" class="back-link">&larr; Back to all WFH jobs</a>
     <div class="detail-layout">
       <div class="detail-card">
         <h1>${escHtml(title)}</h1>
         <div class="detail-meta">
-          <span>Remote</span><span>Full-time</span><span>${country}</span><span>Posted ${datePosted}</span>
+          <span>WFH</span><span>Full-time</span><span>${country}</span><span>Posted ${datePosted}</span>
         </div>
         <div class="job-content">${content}</div>
-        <a href="${escHtml(apply)}" target="_blank" rel="noopener noreferrer" class="apply-mobile">Apply for This Role &rarr;</a>
+        <a href="${escHtml(apply)}" target="_blank" rel="noopener noreferrer" class="apply-mobile">Apply for This WFH Role &rarr;</a>
       </div>
       <aside class="detail-sidebar">
         <div class="sidebar-card">
           <span class="sidebar-card-label">Job Details</span>
           <ul>
-            <li>Type: Full-time</li>
-            <li>Location: Fully Remote</li>
+            <li>Type: Full-time WFH</li>
+            <li>Location: Work From Home</li>
             <li>Country: ${country}</li>
             <li>Posted: ${datePosted}</li>
           </ul>
