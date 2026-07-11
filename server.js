@@ -69,7 +69,7 @@ setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n >
 
 // Stale-while-revalidate: return cached data instantly (even if stale) and
 // refresh in the background so the *next* request gets fresh data.
-function _fetchWithTimeout(url, opts, ms = 6000) {
+function _fetchWithTimeout(url, opts, ms = 20000) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
