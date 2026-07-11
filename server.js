@@ -417,7 +417,8 @@ const headTag = (title, desc, canonical, extra = '') => `
   <meta name="twitter:description" content="${escHtml(desc)}">
   <link rel="icon" href="${FAVICON}">
   <link rel="preload" href="/font.css" as="style">
-  <link rel="stylesheet" href="/font.css">
+  <link rel="stylesheet" href="/font.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="/font.css"></noscript>
   <meta name="theme-color" content="#0D9488">
   <style>${STYLES}</style>
   ${extra}
