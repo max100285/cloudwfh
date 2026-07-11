@@ -49,8 +49,33 @@ const APPLY_DOMAIN = 'https://ihire.allboardsolutions.in';
 
 // ── ASSETS ────────────────────────────────────────────────
 const STYLES = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
-const FONTS  = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
 const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'><rect width=\'32\' height=\'32\' rx=\'8\' fill=\'%230D9488\'/><path d=\'M25 21H9a5 5 0 010-10c.3 0 .6.03.88.08A7 7 0 0123 16.5 4.5 4.5 0 0125 21z\' fill=\'white\'/><path d=\'M8.5 21h16a3.5 3.5 0 000-7c-.26 0-.52.03-.76.08A6 6 0 005 16.5 3.5 3.5 0 008.5 21z\' fill=\'white\' opacity=\'.7\'/></svg>';
+
+// ── SELF-HOSTED FONTS ─────────────────────────────────────
+let _fontCss = '';
+const _fontFiles = new Map();
+
+async function loadFonts() {
+    try {
+        const cssRes = await fetch(
+            'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
+            { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
+        );
+        let css = await cssRes.text();
+        const urls = [...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map(m => m[1]);
+        await Promise.all(urls.map(async url => {
+            const fname = 'i' + Buffer.from(url).toString('base64url').slice(-12) + '.woff2';
+            const buf   = Buffer.from(await fetch(url).then(r => r.arrayBuffer()));
+            _fontFiles.set(fname, buf);
+            css = css.replace(url, `/font/${fname}`);
+        }));
+        _fontCss = css;
+        console.log(`[OK] Fonts self-hosted (${_fontFiles.size} files)`);
+    } catch (e) {
+        console.warn('[WARN] Font self-hosting failed, falling back to Google Fonts:', e.message);
+        _fontCss = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`;
+    }
+}
 
 // ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
 const TTL_LIST  = 10 * 60 * 1000;
@@ -391,10 +416,8 @@ const headTag = (title, desc, canonical, extra = '') => `
   <meta name="twitter:title"       content="${escHtml(title)}">
   <meta name="twitter:description" content="${escHtml(desc)}">
   <link rel="icon" href="${FAVICON}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="${FONTS}" media="print" onload="this.media='all'">
-  <noscript><link rel="stylesheet" href="${FONTS}"></noscript>
+  <link rel="preload" href="/font.css" as="style">
+  <link rel="stylesheet" href="/font.css">
   <meta name="theme-color" content="#0D9488">
   <style>${STYLES}</style>
   ${extra}
@@ -402,6 +425,18 @@ const headTag = (title, desc, canonical, extra = '') => `
 
 // ── INFRA ROUTES ──────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.get('/font.css', (_req, res) => {
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type('text/css').send(_fontCss);
+});
+
+app.get('/font/:file', (req, res) => {
+    const buf = _fontFiles.get(req.params.file);
+    if (!buf) return res.status(404).end();
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.type('font/woff2').send(buf);
+});
 
 app.get('/googlea5509f9e642a23a1.html', (_req, res) => {
     res.type('text/html').send('google-site-verification: googlea5509f9e642a23a1.html');
@@ -680,6 +715,17 @@ async function start() {
     if (!API_URL) { console.error('[FATAL] API_URL env var is not set'); process.exit(1); }
     if (!API_KEY)  { console.error('[FATAL] API_KEY env var is not set');  process.exit(1); }
 
+    // Pre-warm everything before accepting traffic — guarantees first request hits cache
+    await Promise.all([
+        loadFonts(),
+        Promise.all([
+            apiGetJobs({ page: 1 }),
+            apiGetJobs({ page: 2 }),
+            apiGetJobs({ page: 3 }),
+        ]).then(() => console.log('[OK] Jobs cache pre-warmed (pages 1-3)'))
+          .catch(e => console.warn('[WARN] Jobs pre-warm failed:', e.message)),
+    ]);
+
     await new Promise(resolve => app.listen(PORT, () => {
         console.log(`${SITE_NAME} running on :${PORT}`);
         resolve();
@@ -691,7 +737,13 @@ async function start() {
             : console.warn(`[WARN] VPS API health returned HTTP ${r.status}`))
         .catch(e => console.warn(`[WARN] VPS API unreachable: ${e.message}`));
 
-    apiGetJobs({ page: 1 }).then(() => console.log('[OK] Jobs cache pre-warmed')).catch(e => console.warn('[WARN] Jobs pre-warm failed:', e.message));
+    // Keep homepage cache perpetually warm — refresh every 9 min (before 10-min TTL expires)
+    setInterval(() => Promise.all([
+        apiGetJobs({ page: 1 }),
+        apiGetJobs({ page: 2 }),
+        apiGetJobs({ page: 3 }),
+    ]).catch(() => {}), 9 * 60 * 1000);
+
     buildSitemapCache().catch(e => console.warn('[WARN] Sitemap cache failed:', e.message));
     setInterval(() => buildSitemapCache().catch(e => console.warn('[WARN] Sitemap refresh failed:', e.message)), 6 * 60 * 60 * 1000);
 }
