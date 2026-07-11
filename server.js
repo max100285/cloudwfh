@@ -69,6 +69,12 @@ setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n >
 
 // Stale-while-revalidate: return cached data instantly (even if stale) and
 // refresh in the background so the *next* request gets fresh data.
+function _fetchWithTimeout(url, opts, ms = 6000) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
 async function apiFetch(apiPath, ttl = TTL_LIST) {
     const entry = _cacheEntry(apiPath);
     if (entry) {
@@ -77,7 +83,7 @@ async function apiFetch(apiPath, ttl = TTL_LIST) {
         return entry.data;
     }
     // cold miss: must wait
-    const res = await fetch(`${API_URL}${apiPath}`, { headers: API_HDR });
+    const res = await _fetchWithTimeout(`${API_URL}${apiPath}`, { headers: API_HDR });
     if (!res.ok) throw new Error(`API ${apiPath} → HTTP ${res.status}`);
     const data = await res.json();
     _cacheSet(apiPath, data, ttl);
@@ -87,7 +93,7 @@ async function apiFetch(apiPath, ttl = TTL_LIST) {
 function _bgRefresh(apiPath, ttl) {
     if (_refreshing.has(apiPath)) return;
     _refreshing.add(apiPath);
-    fetch(`${API_URL}${apiPath}`, { headers: API_HDR })
+    _fetchWithTimeout(`${API_URL}${apiPath}`, { headers: API_HDR })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => _cacheSet(apiPath, data, ttl))
         .catch(() => {})
