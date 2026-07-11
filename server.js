@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8080;
 
 // ── SITE CONFIG ───────────────────────────────────────────
 const SITE_NAME   = process.env.SITE_NAME   || 'CloudWFH';
-const SITE_DOMAIN = process.env.SITE_DOMAIN || 'localhost:8080';
+const SITE_DOMAIN = process.env.SITE_DOMAIN || process.env.SITE_URL || 'localhost:8080';
 const SITE_URL    = `https://${SITE_DOMAIN}`;
 const TAGLINE     = 'Your gateway to work-from-home careers — updated daily';
 const META_DESC   = 'Find thousands of work-from-home jobs on CloudWFH. Browse WFH roles across every industry — free to apply, no sign-up needed.';
@@ -17,11 +17,11 @@ const LOGO_LETTER = SITE_NAME.slice(0, 2).toUpperCase();
 
 // ── VPS API CONFIG ────────────────────────────────────────
 const API_URL = (process.env.API_URL || '').replace(/\/$/, '');
-const API_KEY  = process.env.API_KEY  || '';
+const API_KEY  = process.env.API_SECRET || process.env.API_KEY || '';
 const API_HDR  = { 'X-Api-Key': API_KEY, 'Accept': 'application/json' };
 
 if (!API_URL) console.warn('[WARN] API_URL env var not set');
-if (!API_KEY)  console.warn('[WARN] API_KEY env var not set');
+if (!API_KEY)  console.warn('[WARN] API_SECRET (or API_KEY) env var not set');
 
 // ── CATEGORIES ────────────────────────────────────────────
 const CATEGORIES = {
