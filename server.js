@@ -52,33 +52,46 @@ const STYLES = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
 const FONTS  = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
 const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'><rect width=\'32\' height=\'32\' rx=\'8\' fill=\'%230D9488\'/><path d=\'M25 21H9a5 5 0 010-10c.3 0 .6.03.88.08A7 7 0 0123 16.5 4.5 4.5 0 0125 21z\' fill=\'white\'/><path d=\'M8.5 21h16a3.5 3.5 0 000-7c-.26 0-.52.03-.76.08A6 6 0 005 16.5 3.5 3.5 0 008.5 21z\' fill=\'white\' opacity=\'.7\'/></svg>';
 
-// ── IN-PROCESS RESPONSE CACHE (list pages only) ───────────
-const TTL_LIST  = 3 * 60 * 1000;
-const MAX_CACHE = 30;
+// ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
+const TTL_LIST  = 10 * 60 * 1000;
+const TTL_JOB   = 30 * 60 * 1000;
+const MAX_CACHE = 60;
 
-const _apiCache = new Map();
+const _apiCache   = new Map();
+const _refreshing = new Set();
 
-function _cacheGet(key) {
-    const e = _apiCache.get(key);
-    if (!e) return null;
-    if (Date.now() > e.expires) { _apiCache.delete(key); return null; }
-    return e.data;
-}
+function _cacheEntry(key) { return _apiCache.get(key) || null; }
 function _cacheSet(key, data, ttl) {
     if (_apiCache.size >= MAX_CACHE) { _apiCache.delete(_apiCache.keys().next().value); }
-    _apiCache.set(key, { data, expires: Date.now() + ttl });
+    _apiCache.set(key, { data, expires: Date.now() + ttl, ttl });
 }
-setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n > v.expires) _apiCache.delete(k); }, 5 * 60 * 1000);
+setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n > v.expires + v.ttl) _apiCache.delete(k); }, 5 * 60 * 1000);
 
-// ── VPS API HELPERS ───────────────────────────────────────
+// Stale-while-revalidate: return cached data instantly (even if stale) and
+// refresh in the background so the *next* request gets fresh data.
 async function apiFetch(apiPath, ttl = TTL_LIST) {
-    const hit = _cacheGet(apiPath);
-    if (hit) return hit;
+    const entry = _cacheEntry(apiPath);
+    if (entry) {
+        if (Date.now() <= entry.expires) return entry.data;   // fresh
+        _bgRefresh(apiPath, ttl);                              // stale → serve immediately, refresh bg
+        return entry.data;
+    }
+    // cold miss: must wait
     const res = await fetch(`${API_URL}${apiPath}`, { headers: API_HDR });
     if (!res.ok) throw new Error(`API ${apiPath} → HTTP ${res.status}`);
     const data = await res.json();
     _cacheSet(apiPath, data, ttl);
     return data;
+}
+
+function _bgRefresh(apiPath, ttl) {
+    if (_refreshing.has(apiPath)) return;
+    _refreshing.add(apiPath);
+    fetch(`${API_URL}${apiPath}`, { headers: API_HDR })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => _cacheSet(apiPath, data, ttl))
+        .catch(() => {})
+        .finally(() => _refreshing.delete(apiPath));
 }
 
 function normaliseJob(j) {
@@ -102,25 +115,21 @@ async function apiGetJobs({ page = 1, search = '' } = {}) {
     };
 }
 
-async function apiGetJob(slug) {
+// Job data is cached (stable content); randomJobs are fetched fresh each request
+// so they vary per visit, matching original behaviour.
+async function apiGetJobWithRelated(slug) {
+    let job = null;
     try {
-        const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(slug)}`, { headers: API_HDR });
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.job ? normaliseJob(data.job) : null;
-    } catch { return null; }
-}
+        const data = await apiFetch(`/api/jobs/${encodeURIComponent(slug)}`, TTL_JOB);
+        job = data.job ? normaliseJob(data.job) : null;
+    } catch { return { job: null, randomJobs: [] }; }
+    if (!job) return { job: null, randomJobs: [] };
 
-async function apiGetRelated(id) {
     try {
-        const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(id)}`, { headers: API_HDR });
-        if (!res.ok) return { recentJobs: [], randomJobs: [] };
-        const data = await res.json();
-        return {
-            recentJobs: (data.recentJobs || []).map(normaliseJob),
-            randomJobs: (data.randomJobs || []).map(normaliseJob),
-        };
-    } catch { return { recentJobs: [], randomJobs: [] }; }
+        const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(job.id)}`, { headers: API_HDR });
+        const data = res.ok ? await res.json() : {};
+        return { job, randomJobs: (data.randomJobs || []).map(normaliseJob) };
+    } catch { return { job, randomJobs: [] }; }
 }
 
 // ── CRC32 (deterministic dates per slug) ─────────────────
@@ -580,10 +589,8 @@ ${footer()}
 // ── JOB DETAIL ────────────────────────────────────────────
 app.get('/remote-jobs/:slug', async (req, res) => {
     try {
-        const job = await apiGetJob(req.params.slug);
+        const { job, randomJobs } = await apiGetJobWithRelated(req.params.slug);
         if (!job) return res.redirect(301, '/');
-
-        const { randomJobs } = await apiGetRelated(job.id);
         res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=120');
         const content    = formatContent(job.post_content);
         const datePosted = jobPostedDate(job.slug);
@@ -678,6 +685,7 @@ async function start() {
             : console.warn(`[WARN] VPS API health returned HTTP ${r.status}`))
         .catch(e => console.warn(`[WARN] VPS API unreachable: ${e.message}`));
 
+    apiGetJobs({ page: 1 }).then(() => console.log('[OK] Jobs cache pre-warmed')).catch(e => console.warn('[WARN] Jobs pre-warm failed:', e.message));
     buildSitemapCache().catch(e => console.warn('[WARN] Sitemap cache failed:', e.message));
     setInterval(() => buildSitemapCache().catch(e => console.warn('[WARN] Sitemap refresh failed:', e.message)), 6 * 60 * 60 * 1000);
 }
