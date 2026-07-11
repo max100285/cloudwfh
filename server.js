@@ -115,8 +115,9 @@ async function apiGetJobs({ page = 1, search = '' } = {}) {
     };
 }
 
-// Job data is cached (stable content); randomJobs are fetched fresh each request
-// so they vary per visit, matching original behaviour.
+// Both calls cached — slug lookup for job content (30 min SWR), id lookup for
+// randomJobs (2 min SWR). Eliminates the serial uncached round-trips that caused
+// ~10s TTFB on job detail pages.
 async function apiGetJobWithRelated(slug) {
     let job = null;
     try {
@@ -126,8 +127,7 @@ async function apiGetJobWithRelated(slug) {
     if (!job) return { job: null, randomJobs: [] };
 
     try {
-        const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(job.id)}`, { headers: API_HDR });
-        const data = res.ok ? await res.json() : {};
+        const data = await apiFetch(`/api/jobs/${encodeURIComponent(job.id)}`, 2 * 60 * 1000);
         return { job, randomJobs: (data.randomJobs || []).map(normaliseJob) };
     } catch { return { job, randomJobs: [] }; }
 }
