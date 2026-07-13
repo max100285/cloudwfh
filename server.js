@@ -241,36 +241,56 @@ let _sitemapLines = [];
 let _sitemapBuiltAt = null;
 let _sitemapLastError = null;
 
+// Fetch one page with a hard timeout covering both headers AND body.
+// Unlike _fetchWithTimeout, the abort timer is NOT cleared on headers —
+// it stays alive until after res.json() completes.
+async function _fetchPageData(pageNum) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+        const res = await fetch(`${API_URL}/api/jobs?page=${pageNum}`, { headers: API_HDR, signal: ctrl.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json(); // abort still active here
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function buildSitemapCache() {
     try {
         const newLines = [];
-        const first = await apiFetch('/api/jobs?page=1');
-        const totalPages = first?.pagination?.totalPages || 1;
-        for (const j of (first.jobs || [])) {
-            if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
+
+        // Phase 1: drain whatever is already in the response cache — no network calls
+        const page1entry = _cacheEntry('/api/jobs?page=1');
+        const totalPages = page1entry?.data?.pagination?.totalPages || 0;
+        const cachedPages = new Set();
+        for (const [key, entry] of _apiCache) {
+            if (!key.startsWith('/api/jobs?page=')) continue;
+            cachedPages.add(key);
+            for (const j of (entry.data?.jobs || [])) {
+                if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
+            }
         }
 
-        // Fetch remaining pages in parallel batches of 10
-        const BATCH = 10;
-        for (let p = 2; p <= totalPages; p += BATCH) {
-            const pages = await Promise.all(
-                Array.from({ length: Math.min(BATCH, totalPages - p + 1) }, (_, i) =>
-                    apiFetch(`/api/jobs?page=${p + i}`).catch(() => null)
-                )
-            );
-            for (const data of pages) {
-                if (!data) continue;
-                for (const j of (data.jobs || [])) {
+        // Phase 2: fetch any pages not already cached, with a real per-page timeout
+        for (let p = 1; p <= totalPages; p++) {
+            const key = `/api/jobs?page=${p}`;
+            if (cachedPages.has(key)) continue;
+            try {
+                const data = await _fetchPageData(p);
+                _cacheSet(key, data, TTL_LIST);
+                for (const j of (data?.jobs || [])) {
                     if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
                 }
+            } catch (e) {
+                console.warn(`[WARN] Sitemap page ${p} skipped:`, e.message);
             }
         }
 
         _sitemapLines = newLines;
         _sitemapBuiltAt = new Date().toISOString();
         _sitemapLastError = null;
-        if (_sitemapLines.length === 0) console.warn('[WARN] Sitemap: 0 jobs found after paginating /api/jobs');
-        else console.log(`[sitemap] ${_sitemapLines.length} jobs cached at ${_sitemapBuiltAt}`);
+        console.log(`[sitemap] ${_sitemapLines.length} jobs from ${totalPages} pages at ${_sitemapBuiltAt}`);
     } catch (e) {
         _sitemapLastError = e.message;
         console.warn('[WARN] Sitemap cache failed:', e.message);
