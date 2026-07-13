@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8080;
 
 // ── SITE CONFIG ───────────────────────────────────────────
 const SITE_NAME   = process.env.SITE_NAME   || 'CloudWFH';
-const SITE_DOMAIN = (process.env.SITE_DOMAIN || process.env.SITE_URL || 'localhost:8080').replace(/^https?:\/\//, '');
+const SITE_DOMAIN = process.env.SITE_DOMAIN || 'localhost:8080';
 const SITE_URL    = `https://${SITE_DOMAIN}`;
 const TAGLINE     = 'Your gateway to work-from-home careers — updated daily';
 const META_DESC   = 'Find thousands of work-from-home jobs on CloudWFH. Browse WFH roles across every industry — free to apply, no sign-up needed.';
