@@ -243,43 +243,33 @@ let _sitemapLastError = null;
 
 async function buildSitemapCache() {
     try {
-        const res = await _fetchWithTimeout(`${API_URL}/api/sitemap-jobs`, { headers: API_HDR }, 60000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        _sitemapLines = []; // release old data so GC can reclaim before we allocate new
-
         const newLines = [];
-        const decoder = new TextDecoder();
-        const TAIL = 512;
-        let buf = '';
-        let pSlug = null, pDate = null;
+        const first = await apiFetch('/api/jobs?page=1');
+        const totalPages = first?.pagination?.totalPages || 1;
+        for (const j of (first.jobs || [])) {
+            if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
+        }
 
-        const extract = (text) => {
-            const re = /"slug":"([^"\\]*)"|"post_date":"([^"\\]*)"/g;
-            let m;
-            while ((m = re.exec(text)) !== null) {
-                if (m[1] !== undefined) {
-                    if (pDate !== null) { newLines.push(m[1] + '\t' + pDate); pDate = null; }
-                    else pSlug = m[1];
-                } else {
-                    if (pSlug !== null) { newLines.push(pSlug + '\t' + m[2]); pSlug = null; }
-                    else pDate = m[2];
+        // Fetch remaining pages in parallel batches of 10
+        const BATCH = 10;
+        for (let p = 2; p <= totalPages; p += BATCH) {
+            const pages = await Promise.all(
+                Array.from({ length: Math.min(BATCH, totalPages - p + 1) }, (_, i) =>
+                    apiFetch(`/api/jobs?page=${p + i}`).catch(() => null)
+                )
+            );
+            for (const data of pages) {
+                if (!data) continue;
+                for (const j of (data.jobs || [])) {
+                    if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
                 }
             }
-        };
-
-        for await (const rawChunk of res.body) {
-            buf += decoder.decode(rawChunk, { stream: true });
-            if (buf.length <= TAIL) continue;
-            extract(buf.slice(0, buf.length - TAIL));
-            buf = buf.slice(buf.length - TAIL);
         }
-        extract(buf);
 
         _sitemapLines = newLines;
         _sitemapBuiltAt = new Date().toISOString();
         _sitemapLastError = null;
-        if (_sitemapLines.length === 0) console.warn(`[WARN] Sitemap: API returned 0 jobs — check ${API_URL}/api/sitemap-jobs`);
+        if (_sitemapLines.length === 0) console.warn('[WARN] Sitemap: 0 jobs found after paginating /api/jobs');
         else console.log(`[sitemap] ${_sitemapLines.length} jobs cached at ${_sitemapBuiltAt}`);
     } catch (e) {
         _sitemapLastError = e.message;
