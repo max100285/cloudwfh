@@ -298,10 +298,7 @@ async function buildSitemapCache() {
                 .filter(n => !cachedPages.has(`/api/jobs?page=${n}`));
             if (!batch.length) continue;
             const results = await Promise.all(batch.map(n =>
-                _fetchPageData(n).then(data => {
-                    _cacheSet(`/api/jobs?page=${n}`, data, TTL_LIST);
-                    return data?.jobs || [];
-                }).catch(() => [])
+                _fetchPageData(n).then(data => data?.jobs || []).catch(() => [])
             ));
             for (const jobs of results)
                 for (const j of jobs)
@@ -465,7 +462,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/sitemap-debug', (_req, res) => {
     res.json({
-        v: 6,
+        v: 7,
         jobs: _sitemapLines.length,
         builtAt: _sitemapBuiltAt,
         lastError: _sitemapLastError,
