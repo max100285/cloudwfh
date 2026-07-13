@@ -499,7 +499,7 @@ app.get('/robots.txt', (_req, res) => {
 app.get('/sitemap.xml', (_req, res) => {
     const total = Math.ceil(_sitemapLines.length / SITEMAP_SIZE);
     const today = new Date().toISOString().split('T')[0];
-    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Cache-Control', 'no-cache');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${Array.from({ length: total }, (_, i) =>
