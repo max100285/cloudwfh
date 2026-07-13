@@ -443,6 +443,10 @@ app.get('/googlea5509f9e642a23a1.html', (_req, res) => {
     res.type('text/html').send('google-site-verification: googlea5509f9e642a23a1.html');
 });
 
+app.get('/google6b031c2b3d6a67cc.html', (_req, res) => {
+    res.type('text/html').send('google-site-verification: google6b031c2b3d6a67cc.html');
+});
+
 app.get('/robots.txt', (_req, res) => {
     res.set('Cache-Control', 'public, max-age=86400');
     res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml`);
