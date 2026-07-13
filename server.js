@@ -238,6 +238,8 @@ function shuffle(arr) {
 // ── SITEMAP CACHE ─────────────────────────────────────────
 // Flat "slug\tdate" strings use ~140MB vs ~280MB for {slug,post_date} objects
 let _sitemapLines = [];
+let _sitemapBuiltAt = null;
+let _sitemapLastError = null;
 
 async function buildSitemapCache() {
     try {
@@ -275,8 +277,12 @@ async function buildSitemapCache() {
         extract(buf);
 
         _sitemapLines = newLines;
-        console.log(`[sitemap] ${_sitemapLines.length} jobs cached`);
+        _sitemapBuiltAt = new Date().toISOString();
+        _sitemapLastError = null;
+        if (_sitemapLines.length === 0) console.warn(`[WARN] Sitemap: API returned 0 jobs — check ${API_URL}/api/sitemap-jobs`);
+        else console.log(`[sitemap] ${_sitemapLines.length} jobs cached at ${_sitemapBuiltAt}`);
     } catch (e) {
+        _sitemapLastError = e.message;
         console.warn('[WARN] Sitemap cache failed:', e.message);
     }
 }
@@ -426,6 +432,15 @@ const headTag = (title, desc, canonical, extra = '') => `
 
 // ── INFRA ROUTES ──────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.get('/sitemap-debug', (_req, res) => {
+    res.json({
+        jobs: _sitemapLines.length,
+        builtAt: _sitemapBuiltAt,
+        lastError: _sitemapLastError,
+        apiUrl: API_URL,
+    });
+});
 
 app.get('/font.css', (_req, res) => {
     res.set('Cache-Control', 'public, max-age=86400');
@@ -729,7 +744,6 @@ async function start() {
             apiGetJobs({ page: 3 }),
         ]).then(() => console.log('[OK] Jobs cache pre-warmed (pages 1-3)'))
           .catch(e => console.warn('[WARN] Jobs pre-warm failed:', e.message)),
-        buildSitemapCache().catch(e => console.warn('[WARN] Sitemap pre-warm failed:', e.message)),
     ]);
 
     await new Promise(resolve => app.listen(PORT, () => {
