@@ -796,6 +796,7 @@ async function start() {
         apiGetJobs({ page: 3 }),
     ]).catch(() => {}), 9 * 60 * 1000);
 
+    buildSitemapCache().catch(e => console.warn('[WARN] Sitemap cache failed:', e.message));
     setInterval(() => buildSitemapCache().catch(e => console.warn('[WARN] Sitemap refresh failed:', e.message)), 6 * 60 * 60 * 1000);
 }
 
