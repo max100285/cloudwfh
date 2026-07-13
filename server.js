@@ -272,25 +272,32 @@ async function buildSitemapCache() {
             }
         }
 
-        // Phase 2: fetch any pages not already cached, with a real per-page timeout
-        for (let p = 1; p <= totalPages; p++) {
-            const key = `/api/jobs?page=${p}`;
-            if (cachedPages.has(key)) continue;
-            try {
-                const data = await _fetchPageData(p);
-                _cacheSet(key, data, TTL_LIST);
-                for (const j of (data?.jobs || [])) {
+        // Publish Phase 1 results immediately so the sitemap is never empty
+        _sitemapLines = [...newLines];
+        _sitemapBuiltAt = new Date().toISOString();
+        _sitemapLastError = null;
+        console.log(`[sitemap] phase1: ${_sitemapLines.length} jobs from cache (${totalPages} total pages)`);
+
+        // Phase 2: fetch uncached pages in parallel batches with hard per-page timeout
+        const BATCH = 5;
+        for (let p = 1; p <= totalPages; p += BATCH) {
+            const batch = Array.from({ length: Math.min(BATCH, totalPages - p + 1) }, (_, i) => p + i)
+                .filter(n => !cachedPages.has(`/api/jobs?page=${n}`));
+            if (!batch.length) continue;
+            const results = await Promise.all(batch.map(n =>
+                _fetchPageData(n).then(data => {
+                    _cacheSet(`/api/jobs?page=${n}`, data, TTL_LIST);
+                    return data?.jobs || [];
+                }).catch(() => [])
+            ));
+            for (const jobs of results)
+                for (const j of jobs)
                     if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
-                }
-            } catch (e) {
-                console.warn(`[WARN] Sitemap page ${p} skipped:`, e.message);
-            }
         }
 
         _sitemapLines = newLines;
         _sitemapBuiltAt = new Date().toISOString();
-        _sitemapLastError = null;
-        console.log(`[sitemap] ${_sitemapLines.length} jobs from ${totalPages} pages at ${_sitemapBuiltAt}`);
+        console.log(`[sitemap] phase2 done: ${_sitemapLines.length} jobs total`);
     } catch (e) {
         _sitemapLastError = e.message;
         console.warn('[WARN] Sitemap cache failed:', e.message);
