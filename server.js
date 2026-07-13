@@ -291,7 +291,7 @@ async function buildSitemapCache() {
         _sitemapLastError = null;
         console.log(`[sitemap] phase1: ${_sitemapLines.length} jobs from cache (${totalPages} total pages)`);
 
-        // Phase 2: fetch uncached pages in parallel batches with hard per-page timeout
+        // Phase 2: fetch uncached pages in parallel batches, publish after each batch
         const BATCH = 5;
         for (let p = 1; p <= totalPages; p += BATCH) {
             const batch = Array.from({ length: Math.min(BATCH, totalPages - p + 1) }, (_, i) => p + i)
@@ -303,11 +303,11 @@ async function buildSitemapCache() {
             for (const jobs of results)
                 for (const j of jobs)
                     if (j.slug) newLines.push(j.slug + '\t' + (j.post_date || ''));
+            _sitemapLines = [...newLines]; // publish incrementally after each batch
         }
 
-        _sitemapLines = newLines;
         _sitemapBuiltAt = new Date().toISOString();
-        console.log(`[sitemap] phase2 done: ${_sitemapLines.length} jobs total`);
+        console.log(`[sitemap] done: ${_sitemapLines.length} jobs from ${totalPages} pages`);
     } catch (e) {
         _sitemapLastError = e.message;
         console.warn('[WARN] Sitemap cache failed:', e.message);
