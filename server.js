@@ -55,18 +55,31 @@ const FAVICON = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' vi
 let _fontCss = '';
 const _fontFiles = new Map();
 
+async function _fetchWithHardTimeout(url, opts, ms) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+        const res = await fetch(url, { ...opts, signal: ctrl.signal });
+        const body = opts?.asBuffer ? await res.arrayBuffer() : await res.text();
+        return { res, body };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function loadFonts() {
     try {
-        const cssRes = await fetch(
+        const { body: css0 } = await _fetchWithHardTimeout(
             'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-            { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
+            { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } },
+            10000
         );
-        let css = await cssRes.text();
+        let css = css0;
         const urls = [...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map(m => m[1]);
         await Promise.all(urls.map(async url => {
             const fname = 'i' + Buffer.from(url).toString('base64url').slice(-12) + '.woff2';
-            const buf   = Buffer.from(await fetch(url).then(r => r.arrayBuffer()));
-            _fontFiles.set(fname, buf);
+            const { body } = await _fetchWithHardTimeout(url, { asBuffer: true }, 10000);
+            _fontFiles.set(fname, Buffer.from(body));
             css = css.replace(url, `/font/${fname}`);
         }));
         _fontCss = css;
@@ -452,10 +465,12 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/sitemap-debug', (_req, res) => {
     res.json({
+        v: 6,
         jobs: _sitemapLines.length,
         builtAt: _sitemapBuiltAt,
         lastError: _sitemapLastError,
         apiUrl: API_URL,
+        cacheKeys: [..._apiCache.keys()].filter(k => k.startsWith('/api/jobs')),
     });
 });
 
