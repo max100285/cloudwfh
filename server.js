@@ -241,7 +241,7 @@ let _sitemapLines = [];
 
 async function buildSitemapCache() {
     try {
-        const res = await fetch(`${API_URL}/api/sitemap-jobs`, { headers: API_HDR });
+        const res = await _fetchWithTimeout(`${API_URL}/api/sitemap-jobs`, { headers: API_HDR }, 60000);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         _sitemapLines = []; // release old data so GC can reclaim before we allocate new
@@ -729,6 +729,7 @@ async function start() {
             apiGetJobs({ page: 3 }),
         ]).then(() => console.log('[OK] Jobs cache pre-warmed (pages 1-3)'))
           .catch(e => console.warn('[WARN] Jobs pre-warm failed:', e.message)),
+        buildSitemapCache().catch(e => console.warn('[WARN] Sitemap pre-warm failed:', e.message)),
     ]);
 
     await new Promise(resolve => app.listen(PORT, () => {
@@ -749,7 +750,6 @@ async function start() {
         apiGetJobs({ page: 3 }),
     ]).catch(() => {}), 9 * 60 * 1000);
 
-    buildSitemapCache().catch(e => console.warn('[WARN] Sitemap cache failed:', e.message));
     setInterval(() => buildSitemapCache().catch(e => console.warn('[WARN] Sitemap refresh failed:', e.message)), 6 * 60 * 60 * 1000);
 }
 
