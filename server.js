@@ -497,19 +497,21 @@ app.get('/robots.txt', (_req, res) => {
     res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml`);
 });
 
-app.get('/sitemap.xml', (_req, res) => {
+app.get('/sitemap.xml', (req, res) => {
+    const base  = `https://${req.get('host')}`;
     const total = Math.ceil(_sitemapLines.length / SITEMAP_SIZE);
     const today = new Date().toISOString().split('T')[0];
     res.set('Cache-Control', 'no-cache');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${Array.from({ length: total }, (_, i) =>
-    `  <sitemap><loc>${SITE_URL}/sitemap-jobs${i+1}.xml</loc><lastmod>${today}</lastmod></sitemap>`
+    `  <sitemap><loc>${base}/sitemap-jobs${i+1}.xml</loc><lastmod>${today}</lastmod></sitemap>`
 ).join('\n')}
 </sitemapindex>`);
 });
 
 app.get('/sitemap-jobs:num.xml', (req, res) => {
+    const base  = `https://${req.get('host')}`;
     const n     = parseInt(req.params.num);
     const today = new Date().toISOString().split('T')[0];
     const chunk = _sitemapLines.slice((n-1)*SITEMAP_SIZE, n*SITEMAP_SIZE);
@@ -522,7 +524,7 @@ ${chunk.map(line => {
     const slug = tab >= 0 ? line.slice(0, tab) : line;
     const raw  = tab >= 0 ? line.slice(tab + 1) : '';
     const d    = raw ? new Date(raw).toISOString().split('T')[0] : today;
-    return `  <url><loc>${SITE_URL}/remote-jobs/${slug}</loc><lastmod>${d}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`;
+    return `  <url><loc>${base}/remote-jobs/${slug}</loc><lastmod>${d}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`;
 }).join('\n')}
 </urlset>`);
 });
