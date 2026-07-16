@@ -91,9 +91,9 @@ async function loadFonts() {
 }
 
 // ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
-const TTL_LIST  = 10 * 60 * 1000;
-const TTL_JOB   = 30 * 60 * 1000;
-const MAX_CACHE = 60;
+const TTL_LIST  = 60 * 60 * 1000;
+const TTL_JOB   = 60 * 60 * 1000;
+const MAX_CACHE = 200;
 
 const _apiCache   = new Map();
 const _refreshing = new Set();
@@ -318,6 +318,27 @@ async function buildSitemapCache() {
 app.use(compression());
 app.disable('x-powered-by');
 
+// ── SECURITY HEADERS ──────────────────────────────────────
+app.use((req, res, next) => {
+    res.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'SAMEORIGIN');
+    res.set('Cross-Origin-Opener-Policy', 'same-origin');
+    res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.set('Content-Security-Policy',
+        "default-src 'self'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "font-src 'self' data:; " +
+        "img-src 'self' data: https:; " +
+        "connect-src 'self'; " +
+        "script-src 'none'; " +
+        "frame-ancestors 'none'; " +
+        "require-trusted-types-for 'script'"
+    );
+    next();
+});
+
 // ── AI BOT BLOCKING ───────────────────────────────────────
 const BLOCKED_BOTS = [
     'AddSearchBot','AgentTimes','AI2Bot','AI2Bot-DeepResearchEval','Ai2Bot-Dolma',
@@ -450,8 +471,7 @@ const headTag = (title, desc, canonical, extra = '') => `
   <meta name="twitter:description" content="${escHtml(desc)}">
   <link rel="icon" href="${FAVICON}">
   <link rel="preload" href="/font.css" as="style">
-  <link rel="stylesheet" href="/font.css" media="print" onload="this.media='all'">
-  <noscript><link rel="stylesheet" href="/font.css"></noscript>
+  <link rel="stylesheet" href="/font.css">
   <meta name="theme-color" content="#0D9488">
   <style>${STYLES}</style>
   ${extra}
@@ -550,7 +570,7 @@ app.get(['/', '/page/:page'], async (req, res) => {
 
         res.set('Cache-Control', search
             ? 'no-store'
-            : 'public, max-age=300, stale-while-revalidate=60');
+            : 'public, max-age=600, stale-while-revalidate=3600');
         res.send(`<!DOCTYPE html><html lang="en">
 ${headTag(`${SITE_NAME} — ${TAGLINE}`, META_DESC, canonical, noindexTag)}
 <body>
@@ -642,7 +662,7 @@ app.get('/:category', async (req, res, next) => {
 
     try {
         const data = await apiGetJobs({ page, search });
-        res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600');
         res.send(`<!DOCTYPE html><html lang="en">
 ${headTag(
     `WFH ${label} Jobs — ${data.pagination.totalJobs.toLocaleString()} Openings | ${SITE_NAME}`,
@@ -684,7 +704,7 @@ app.get('/remote-jobs/:slug', async (req, res) => {
     try {
         const { job, randomJobs } = await apiGetJobWithRelated(req.params.slug);
         if (!job) return res.redirect(301, '/');
-        res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=120');
+        res.set('Cache-Control', 'public, max-age=1800, stale-while-revalidate=3600');
         const content    = formatContent(job.post_content);
         const datePosted = jobPostedDate(job.slug);
         const validThru  = jobValidThrough(job.slug);
