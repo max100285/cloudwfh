@@ -93,9 +93,11 @@ async function loadFonts() {
 // ── IN-PROCESS RESPONSE CACHE ─────────────────────────────
 const TTL_LIST  = 60 * 60 * 1000;
 const TTL_JOB   = 60 * 60 * 1000;
+const TTL_HTML  = 60 * 60 * 1000;
 const MAX_CACHE = 200;
 
 const _apiCache   = new Map();
+const _htmlCache  = new Map();
 const _refreshing = new Set();
 
 function _cacheEntry(key) { return _apiCache.get(key) || null; }
@@ -103,7 +105,17 @@ function _cacheSet(key, data, ttl) {
     if (_apiCache.size >= MAX_CACHE) { _apiCache.delete(_apiCache.keys().next().value); }
     _apiCache.set(key, { data, expires: Date.now() + ttl, ttl });
 }
-setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n > v.expires + v.ttl) _apiCache.delete(k); }, 5 * 60 * 1000);
+function htmlCacheGet(key) {
+    const e = _htmlCache.get(key);
+    if (!e) return null;
+    if (Date.now() > e.expires) { _htmlCache.delete(key); return null; }
+    return e.html;
+}
+function htmlCacheSet(key, html) {
+    if (_htmlCache.size >= MAX_CACHE) { _htmlCache.delete(_htmlCache.keys().next().value); }
+    _htmlCache.set(key, { html, expires: Date.now() + TTL_HTML });
+}
+setInterval(() => { const n = Date.now(); for (const [k,v] of _apiCache) if (n > v.expires + v.ttl) _apiCache.delete(k); for (const [k,v] of _htmlCache) if (n > v.expires) _htmlCache.delete(k); }, 5 * 60 * 1000);
 
 // Stale-while-revalidate: return cached data instantly (even if stale) and
 // refresh in the background so the *next* request gets fresh data.
@@ -556,6 +568,14 @@ app.get(['/', '/page/:page'], async (req, res) => {
         const search = (req.query.search || '').trim().toLowerCase();
         const isHome = page === 1 && !search;
 
+        if (!search) {
+            const cached = htmlCacheGet(`list:${page}`);
+            if (cached) {
+                res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600');
+                return res.send(cached);
+            }
+        }
+
         const [data, recent] = await Promise.all([
             apiGetJobs({ page, search }),
             isHome ? apiGetJobs({ page: 1 }) : Promise.resolve(null),
@@ -568,10 +588,7 @@ app.get(['/', '/page/:page'], async (req, res) => {
         const canonical  = `${SITE_URL}${page > 1 ? `/page/${page}/` : '/'}`;
         const noindexTag = search ? '<meta name="robots" content="noindex,follow">' : '';
 
-        res.set('Cache-Control', search
-            ? 'no-store'
-            : 'public, max-age=600, stale-while-revalidate=3600');
-        res.send(`<!DOCTYPE html><html lang="en">
+        const html = `<!DOCTYPE html><html lang="en">
 ${headTag(`${SITE_NAME} — ${TAGLINE}`, META_DESC, canonical, noindexTag)}
 <body>
 ${nav()}
@@ -647,7 +664,10 @@ ${data.jobs.length ? `
 `:`<div class="empty-state"><p>No positions match your search.</p><a href="/">View all listings &rarr;</a></div>`}
 </main>
 ${footer()}
-</body></html>`);
+</body></html>`;
+        if (!search) htmlCacheSet(`list:${page}`, html);
+        res.set('Cache-Control', search ? 'no-store' : 'public, max-age=600, stale-while-revalidate=3600');
+        res.send(html);
     } catch(e) { console.error(e); res.status(500).send('Server Error'); }
 });
 
@@ -661,9 +681,14 @@ app.get('/:category', async (req, res, next) => {
     const canonical = `${SITE_URL}/${req.params.category}`;
 
     try {
+        const catCacheKey = `cat:${req.params.category}:${page}`;
+        const catCached = htmlCacheGet(catCacheKey);
+        if (catCached) {
+            res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600');
+            return res.send(catCached);
+        }
         const data = await apiGetJobs({ page, search });
-        res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600');
-        res.send(`<!DOCTYPE html><html lang="en">
+        const catHtml = `<!DOCTYPE html><html lang="en">
 ${headTag(
     `WFH ${label} Jobs — ${data.pagination.totalJobs.toLocaleString()} Openings | ${SITE_NAME}`,
     `Browse ${data.pagination.totalJobs.toLocaleString()} work-from-home ${search} jobs on ${SITE_NAME}. Apply for free — no sign-up required.`,
@@ -695,11 +720,14 @@ ${data.jobs.length?`
 :`<div class="empty-state"><p>No positions found in this category.</p><a href="/">Browse all listings &rarr;</a></div>`}
 </main>
 ${footer()}
-</body></html>`);
+</body></html>`;
+        htmlCacheSet(catCacheKey, catHtml);
+        res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600');
+        res.send(catHtml);
     } catch(e) { console.error(e); res.status(500).send('Server Error'); }
 });
 
-// ── JOB DETAIL ────────────────────────────────────────────
+// ── JOB DETAIL) ────────────────────────────────────────────
 app.get('/remote-jobs/:slug', async (req, res) => {
     try {
         const { job, randomJobs } = await apiGetJobWithRelated(req.params.slug);
